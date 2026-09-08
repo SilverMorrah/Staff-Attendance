@@ -78,31 +78,23 @@ Screens:
         Set(varSearchText, "")
     Children:
       - recBlob1:
-          Control: Rectangle
+          Control: Circle
           Properties:
             X: =-120
             Y: =-140
             Width: =420
             Height: =420
             Fill: =clrBgAccent1
-            RadiusTopLeft: =210
-            RadiusTopRight: =210
-            RadiusBottomLeft: =210
-            RadiusBottomRight: =210
             BorderStyle: =BorderStyle.None
 
       - recBlob2:
-          Control: Rectangle
+          Control: Circle
           Properties:
             X: =Parent.Width - 260
             Y: =Parent.Height - 300
             Width: =380
             Height: =380
             Fill: =clrBgAccent2
-            RadiusTopLeft: =190
-            RadiusTopRight: =190
-            RadiusBottomLeft: =190
-            RadiusBottomRight: =190
             BorderStyle: =BorderStyle.None
 
       - lblAppTitle:
@@ -132,11 +124,13 @@ Screens:
 
       - grpRoleCards:
           Control: GroupContainer
+          Variant: verticalAutoLayoutContainer
           Properties:
             X: =(Parent.Width - 340) / 2
             Y: =Parent.Height * 0.42
             Width: =340
             Height: =260
+            LayoutMode: =LayoutMode.Auto
             LayoutDirection: =LayoutDirection.Vertical
             LayoutGap: =16
           Children:
@@ -194,17 +188,13 @@ Screens:
       Fill: =clrBgTop
     Children:
       - recBlob3:
-          Control: Rectangle
+          Control: Circle
           Properties:
             X: =Parent.Width - 200
             Y: =-160
             Width: =360
             Height: =360
             Fill: =clrBgAccent2
-            RadiusTopLeft: =180
-            RadiusTopRight: =180
-            RadiusBottomLeft: =180
-            RadiusBottomRight: =180
             BorderStyle: =BorderStyle.None
 
       - icBack:
@@ -241,10 +231,6 @@ Screens:
             Fill: =clrGlassBg
             BorderColor: =clrGlassBorder
             BorderThickness: =1
-            RadiusTopLeft: =16
-            RadiusTopRight: =16
-            RadiusBottomLeft: =16
-            RadiusBottomRight: =16
 
       - icSearch:
           Control: Icon
@@ -316,10 +302,6 @@ Screens:
                     )
                   BorderThickness: |
                     =If(varSelectedStaff.UserId = ThisItem.UserId, 2, 1)
-                  RadiusTopLeft: =18
-                  RadiusTopRight: =18
-                  RadiusBottomLeft: =18
-                  RadiusBottomRight: =18
 
             - imgPhoto:
                 Control: Image
@@ -440,11 +422,13 @@ Screens:
 
       - grpVisitorForm:
           Control: GroupContainer
+          Variant: verticalAutoLayoutContainer
           Properties:
             X: =20
             Y: =100
             Width: =Parent.Width - 40
             Height: =260
+            LayoutMode: =LayoutMode.Auto
             LayoutDirection: =LayoutDirection.Vertical
             LayoutGap: =14
           Children:
@@ -592,10 +576,6 @@ Screens:
             Fill: =clrGlassBg
             BorderColor: =clrGlassBorder
             BorderThickness: =2
-            RadiusTopLeft: =24
-            RadiusTopRight: =24
-            RadiusBottomLeft: =24
-            RadiusBottomRight: =24
 
       - Camera1:
           Control: Camera
