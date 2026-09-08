@@ -1,0 +1,761 @@
+# =============================================================================
+# STAFF ATTENDANCE APP — Power Apps Canvas App YAML Source
+# =============================================================================
+# Architecture:
+#   - Identity/People search  -> Office 365 Users connector (Entra ID / Azure AD)
+#   - Attendance transactions -> Dataverse table "StaffAttendances"
+#   - Visual style            -> Glassmorphism (approximated; canvas apps have
+#                                 no native backdrop-blur, so this uses layered
+#                                 translucent RGBA fills, soft borders, rounded
+#                                 corners and depth "blobs" instead)
+#
+# REQUIRED CONNECTORS: Office 365 Users, Microsoft Dataverse
+#
+# REQUIRED DATAVERSE TABLE: StaffAttendances (see schema at bottom of file)
+#
+# DEPLOYMENT NOTE:
+#   This file consolidates all screens under one root for readability/review.
+#   When unpacking with `pac canvas-app pack` or authoring in Power Apps
+#   Studio's Code/YAML editor, each top-level screen below becomes its own
+#   <ScreenName>.fx.yaml file under /Src. Split accordingly before import,
+#   or paste each "Screens.<Name>" block into Studio's per-screen code panel.
+# =============================================================================
+
+App:
+  Properties:
+    StartScreen: =scrWelcome
+    OnStart: |
+      =// ---- Theme palette (glassmorphism) ----
+      Set(clrBgTop, RGBA(30, 27, 75, 1));
+      Set(clrBgAccent1, RGBA(99, 102, 241, 0.30));
+      Set(clrBgAccent2, RGBA(168, 85, 247, 0.25));
+      Set(clrGlassBg, RGBA(255, 255, 255, 0.12));
+      Set(clrGlassBgHover, RGBA(255, 255, 255, 0.20));
+      Set(clrGlassBorder, RGBA(255, 255, 255, 0.35));
+      Set(clrPrimary, RGBA(99, 102, 241, 1));
+      Set(clrPrimaryDark, RGBA(67, 56, 202, 1));
+      Set(clrAccent, RGBA(16, 185, 129, 1));
+      Set(clrAccentDark, RGBA(5, 150, 105, 1));
+      Set(clrTextLight, RGBA(255, 255, 255, 1));
+      Set(clrTextMuted, RGBA(226, 232, 240, 0.75));
+      Set(clrDisabled, RGBA(255, 255, 255, 0.10));
+
+      // ---- App state ----
+      Set(varAttendeeType, "");
+      Set(varSelectedStaff, Blank());
+      Set(varCapturedPhoto, Blank());
+      Set(varSearchText, "");
+      Set(varVisitorName, "");
+      Set(varVisitorCompany, "");
+      Set(varVisitorHost, "");
+
+      // ---- Load directory (lightweight; photos load lazily per tile) ----
+      ClearCollect(
+          colStaffDirectory,
+          ForAll(
+              Office365Users.SearchUser({top: 999}),
+              {
+                  DisplayName: DisplayName,
+                  Mail: Mail,
+                  UserId: Id,
+                  JobTitle: JobTitle
+              }
+          )
+      );
+
+Screens:
+
+  # ===========================================================================
+  # SCREEN 1 — WELCOME / ROLE SELECTION
+  # ===========================================================================
+  scrWelcome:
+    Properties:
+      Fill: =clrBgTop
+      OnVisible: |
+        =Set(varAttendeeType, "");
+        Set(varSelectedStaff, Blank());
+        Set(varCapturedPhoto, Blank());
+        Set(varSearchText, "")
+    Children:
+      - recBlob1:
+          Control: Rectangle
+          Properties:
+            X: =-120
+            Y: =-140
+            Width: =420
+            Height: =420
+            Fill: =clrBgAccent1
+            RadiusTopLeft: =210
+            RadiusTopRight: =210
+            RadiusBottomLeft: =210
+            RadiusBottomRight: =210
+            BorderStyle: =BorderStyle.None
+
+      - recBlob2:
+          Control: Rectangle
+          Properties:
+            X: =Parent.Width - 260
+            Y: =Parent.Height - 300
+            Width: =380
+            Height: =380
+            Fill: =clrBgAccent2
+            RadiusTopLeft: =190
+            RadiusTopRight: =190
+            RadiusBottomLeft: =190
+            RadiusBottomRight: =190
+            BorderStyle: =BorderStyle.None
+
+      - lblAppTitle:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =Parent.Height * 0.16
+            Width: =Parent.Width
+            Height: =60
+            Text: ="Staff Attendance"
+            Align: =Align.Center
+            FontWeight: =FontWeight.Bold
+            Size: =32
+            Color: =clrTextLight
+
+      - lblAppSubtitle:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =lblAppTitle.Y + lblAppTitle.Height + 4
+            Width: =Parent.Width
+            Height: =40
+            Text: ="How are you checking in today?"
+            Align: =Align.Center
+            Size: =16
+            Color: =clrTextMuted
+
+      - grpRoleCards:
+          Control: GroupContainer
+          Properties:
+            X: =(Parent.Width - 340) / 2
+            Y: =Parent.Height * 0.42
+            Width: =340
+            Height: =260
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =16
+          Children:
+            - btnStaff:
+                Control: Button
+                Variant: Button.Classic
+                Properties:
+                  Text: ="👤   I'm Staff"
+                  Width: =340
+                  Height: =110
+                  Fill: =clrGlassBg
+                  HoverFill: =clrGlassBgHover
+                  PressedFill: =clrGlassBgHover
+                  Color: =clrTextLight
+                  BorderColor: =clrGlassBorder
+                  BorderThickness: =1.5
+                  RadiusTopLeft: =20
+                  RadiusTopRight: =20
+                  RadiusBottomLeft: =20
+                  RadiusBottomRight: =20
+                  FontWeight: =FontWeight.Semibold
+                  Size: =20
+                  OnSelect: |
+                    =Set(varAttendeeType, "Staff");
+                    Navigate(scrStaffSelect, ScreenTransition.Fade)
+
+            - btnVisitor:
+                Control: Button
+                Variant: Button.Classic
+                Properties:
+                  Text: ="🧾   I'm a Visitor"
+                  Width: =340
+                  Height: =110
+                  Fill: =clrGlassBg
+                  HoverFill: =clrGlassBgHover
+                  PressedFill: =clrGlassBgHover
+                  Color: =clrTextLight
+                  BorderColor: =clrGlassBorder
+                  BorderThickness: =1.5
+                  RadiusTopLeft: =20
+                  RadiusTopRight: =20
+                  RadiusBottomLeft: =20
+                  RadiusBottomRight: =20
+                  FontWeight: =FontWeight.Semibold
+                  Size: =20
+                  OnSelect: |
+                    =Set(varAttendeeType, "Visitor");
+                    Navigate(scrVisitorInfo, ScreenTransition.Fade)
+
+  # ===========================================================================
+  # SCREEN 2 — STAFF SELECTION (search + tiles, sourced from Entra ID)
+  # ===========================================================================
+  scrStaffSelect:
+    Properties:
+      Fill: =clrBgTop
+    Children:
+      - recBlob3:
+          Control: Rectangle
+          Properties:
+            X: =Parent.Width - 200
+            Y: =-160
+            Width: =360
+            Height: =360
+            Fill: =clrBgAccent2
+            RadiusTopLeft: =180
+            RadiusTopRight: =180
+            RadiusBottomLeft: =180
+            RadiusBottomRight: =180
+            BorderStyle: =BorderStyle.None
+
+      - icBack:
+          Control: Icon
+          Variant: Icon.ChevronLeft
+          Properties:
+            X: =20
+            Y: =24
+            Width: =44
+            Height: =44
+            Color: =clrTextLight
+            OnSelect: =Navigate(scrWelcome, ScreenTransition.Fade)
+
+      - lblTitle:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =24
+            Width: =Parent.Width
+            Height: =44
+            Text: ="Select Your Name"
+            Align: =Align.Center
+            FontWeight: =FontWeight.Bold
+            Size: =22
+            Color: =clrTextLight
+
+      - recSearchBar:
+          Control: Rectangle
+          Properties:
+            X: =20
+            Y: =84
+            Width: =Parent.Width - 40
+            Height: =52
+            Fill: =clrGlassBg
+            BorderColor: =clrGlassBorder
+            BorderThickness: =1
+            RadiusTopLeft: =16
+            RadiusTopRight: =16
+            RadiusBottomLeft: =16
+            RadiusBottomRight: =16
+
+      - icSearch:
+          Control: Icon
+          Variant: Icon.Search
+          Properties:
+            X: =36
+            Y: =98
+            Width: =24
+            Height: =24
+            Color: =clrTextMuted
+
+      - txtSearch:
+          Control: TextInput
+          Variant: TextInput.Classic
+          Properties:
+            X: =70
+            Y: =84
+            Width: =Parent.Width - 90
+            Height: =52
+            HintText: ="Search by first or last name..."
+            Fill: =RGBA(0, 0, 0, 0)
+            BorderThickness: =0
+            Color: =clrTextLight
+            HintTextColor: =clrTextMuted
+            Size: =15
+            Default: =""
+            OnChange: =Set(varSearchText, Trim(Self.Text))
+
+      - galStaff:
+          Control: Gallery
+          Variant: Gallery.Vertical
+          Properties:
+            X: =20
+            Y: =150
+            Width: =Parent.Width - 40
+            Height: =Parent.Height - 240
+            TemplateSize: =92
+            TemplatePadding: =10
+            Fill: =RGBA(0, 0, 0, 0)
+            Items: |
+              =SortByColumns(
+                  Filter(
+                      colStaffDirectory,
+                      IsBlank(varSearchText)
+                      || varSearchText in DisplayName
+                  ),
+                  "DisplayName",
+                  SortOrder.Ascending
+              )
+          Children:
+            - recTile:
+                Control: Rectangle
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =82
+                  Fill: |
+                    =If(
+                        varSelectedStaff.UserId = ThisItem.UserId,
+                        clrGlassBgHover,
+                        clrGlassBg
+                    )
+                  BorderColor: |
+                    =If(
+                        varSelectedStaff.UserId = ThisItem.UserId,
+                        clrAccent,
+                        clrGlassBorder
+                    )
+                  BorderThickness: |
+                    =If(varSelectedStaff.UserId = ThisItem.UserId, 2, 1)
+                  RadiusTopLeft: =18
+                  RadiusTopRight: =18
+                  RadiusBottomLeft: =18
+                  RadiusBottomRight: =18
+
+            - imgPhoto:
+                Control: Image
+                Properties:
+                  X: =16
+                  Y: =16
+                  Width: =50
+                  Height: =50
+                  Image: =Office365Users.UserPhotoV2(ThisItem.UserId)
+                  ImagePosition: =ImagePosition.Fill
+                  RadiusTopLeft: =25
+                  RadiusTopRight: =25
+                  RadiusBottomLeft: =25
+                  RadiusBottomRight: =25
+
+            - lblName:
+                Control: Label
+                Properties:
+                  X: =80
+                  Y: =14
+                  Width: =Parent.TemplateWidth - 130
+                  Height: =28
+                  Text: =ThisItem.DisplayName
+                  Color: =clrTextLight
+                  FontWeight: =FontWeight.Semibold
+                  Size: =16
+
+            - lblJobTitle:
+                Control: Label
+                Properties:
+                  X: =80
+                  Y: =42
+                  Width: =Parent.TemplateWidth - 130
+                  Height: =24
+                  Text: =ThisItem.JobTitle
+                  Color: =clrTextMuted
+                  Size: =12
+
+            - icSelected:
+                Control: Icon
+                Variant: Icon.CheckBadge
+                Properties:
+                  X: =Parent.TemplateWidth - 44
+                  Y: =26
+                  Width: =30
+                  Height: =30
+                  Color: =clrAccent
+                  Visible: =varSelectedStaff.UserId = ThisItem.UserId
+
+            - btnTileTap:
+                Control: Button
+                Variant: Button.Classic
+                Properties:
+                  X: =0
+                  Y: =0
+                  Width: =Parent.TemplateWidth
+                  Height: =82
+                  Fill: =RGBA(0, 0, 0, 0)
+                  HoverFill: =RGBA(0, 0, 0, 0)
+                  PressedFill: =RGBA(0, 0, 0, 0)
+                  BorderThickness: =0
+                  Text: =""
+                  OnSelect: =Set(varSelectedStaff, ThisItem)
+
+      - btnContinueStaff:
+          Control: Button
+          Variant: Button.Classic
+          Properties:
+            X: =20
+            Y: =Parent.Height - 76
+            Width: =Parent.Width - 40
+            Height: =56
+            Text: ="Continue"
+            DisplayMode: |
+              =If(IsBlank(varSelectedStaff), DisplayMode.Disabled, DisplayMode.Edit)
+            Fill: |
+              =If(IsBlank(varSelectedStaff), clrDisabled, clrPrimary)
+            HoverFill: =clrPrimaryDark
+            Color: =clrTextLight
+            RadiusTopLeft: =16
+            RadiusTopRight: =16
+            RadiusBottomLeft: =16
+            RadiusBottomRight: =16
+            FontWeight: =FontWeight.Semibold
+            Size: =16
+            OnSelect: =Navigate(scrCheckIn, ScreenTransition.Fade)
+
+  # ===========================================================================
+  # SCREEN 3 — VISITOR INFO (lightweight branch, no Entra ID lookup)
+  # ===========================================================================
+  scrVisitorInfo:
+    Properties:
+      Fill: =clrBgTop
+    Children:
+      - icBackVisitor:
+          Control: Icon
+          Variant: Icon.ChevronLeft
+          Properties:
+            X: =20
+            Y: =24
+            Width: =44
+            Height: =44
+            Color: =clrTextLight
+            OnSelect: =Navigate(scrWelcome, ScreenTransition.Fade)
+
+      - lblVisitorTitle:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =24
+            Width: =Parent.Width
+            Height: =44
+            Text: ="Visitor Details"
+            Align: =Align.Center
+            FontWeight: =FontWeight.Bold
+            Size: =22
+            Color: =clrTextLight
+
+      - grpVisitorForm:
+          Control: GroupContainer
+          Properties:
+            X: =20
+            Y: =100
+            Width: =Parent.Width - 40
+            Height: =260
+            LayoutDirection: =LayoutDirection.Vertical
+            LayoutGap: =14
+          Children:
+            - txtVisitorName:
+                Control: TextInput
+                Variant: TextInput.Classic
+                Properties:
+                  Width: =Parent.Width
+                  Height: =52
+                  HintText: ="Full name"
+                  Fill: =clrGlassBg
+                  BorderColor: =clrGlassBorder
+                  Color: =clrTextLight
+                  HintTextColor: =clrTextMuted
+                  RadiusTopLeft: =16
+                  RadiusTopRight: =16
+                  RadiusBottomLeft: =16
+                  RadiusBottomRight: =16
+                  OnChange: =Set(varVisitorName, Self.Text)
+
+            - txtVisitorCompany:
+                Control: TextInput
+                Variant: TextInput.Classic
+                Properties:
+                  Width: =Parent.Width
+                  Height: =52
+                  HintText: ="Company / Organization"
+                  Fill: =clrGlassBg
+                  BorderColor: =clrGlassBorder
+                  Color: =clrTextLight
+                  HintTextColor: =clrTextMuted
+                  RadiusTopLeft: =16
+                  RadiusTopRight: =16
+                  RadiusBottomLeft: =16
+                  RadiusBottomRight: =16
+                  OnChange: =Set(varVisitorCompany, Self.Text)
+
+            - txtVisitorHost:
+                Control: TextInput
+                Variant: TextInput.Classic
+                Properties:
+                  Width: =Parent.Width
+                  Height: =52
+                  HintText: ="Person you're visiting"
+                  Fill: =clrGlassBg
+                  BorderColor: =clrGlassBorder
+                  Color: =clrTextLight
+                  HintTextColor: =clrTextMuted
+                  RadiusTopLeft: =16
+                  RadiusTopRight: =16
+                  RadiusBottomLeft: =16
+                  RadiusBottomRight: =16
+                  OnChange: =Set(varVisitorHost, Self.Text)
+
+      - btnContinueVisitor:
+          Control: Button
+          Variant: Button.Classic
+          Properties:
+            X: =20
+            Y: =Parent.Height - 76
+            Width: =Parent.Width - 40
+            Height: =56
+            Text: ="Continue"
+            DisplayMode: |
+              =If(IsBlank(Trim(varVisitorName)), DisplayMode.Disabled, DisplayMode.Edit)
+            Fill: |
+              =If(IsBlank(Trim(varVisitorName)), clrDisabled, clrPrimary)
+            HoverFill: =clrPrimaryDark
+            Color: =clrTextLight
+            RadiusTopLeft: =16
+            RadiusTopRight: =16
+            RadiusBottomLeft: =16
+            RadiusBottomRight: =16
+            FontWeight: =FontWeight.Semibold
+            Size: =16
+            OnSelect: |
+              =Set(
+                  varSelectedStaff,
+                  {
+                      DisplayName: varVisitorName,
+                      Mail: "",
+                      UserId: "",
+                      JobTitle: varVisitorCompany
+                  }
+              );
+              Navigate(scrCheckIn, ScreenTransition.Fade)
+
+  # ===========================================================================
+  # SCREEN 4 — CHECK-IN (camera capture + big Check In button)
+  # ===========================================================================
+  scrCheckIn:
+    Properties:
+      Fill: =clrBgTop
+    Children:
+      - icBackCheckIn:
+          Control: Icon
+          Variant: Icon.ChevronLeft
+          Properties:
+            X: =20
+            Y: =24
+            Width: =44
+            Height: =44
+            Color: =clrTextLight
+            OnSelect: |
+              =Set(varCapturedPhoto, Blank());
+              Back()
+
+      - lblSelectedName:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =24
+            Width: =Parent.Width
+            Height: =32
+            Text: =varSelectedStaff.DisplayName
+            Align: =Align.Center
+            FontWeight: =FontWeight.Bold
+            Size: =20
+            Color: =clrTextLight
+
+      - lblCameraPrompt:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =60
+            Width: =Parent.Width
+            Height: =28
+            Text: |
+              =If(
+                  IsBlank(varCapturedPhoto),
+                  "Tap the camera to take your check-in photo",
+                  "Looking good — ready to check in"
+              )
+            Align: =Align.Center
+            Size: =14
+            Color: =clrTextMuted
+
+      - recCameraFrame:
+          Control: Rectangle
+          Properties:
+            X: =(Parent.Width - 320) / 2
+            Y: =110
+            Width: =320
+            Height: =320
+            Fill: =clrGlassBg
+            BorderColor: =clrGlassBorder
+            BorderThickness: =2
+            RadiusTopLeft: =24
+            RadiusTopRight: =24
+            RadiusBottomLeft: =24
+            RadiusBottomRight: =24
+
+      - Camera1:
+          Control: Camera
+          Properties:
+            X: =(Parent.Width - 300) / 2
+            Y: =120
+            Width: =300
+            Height: =300
+            Visible: =IsBlank(varCapturedPhoto)
+            RadiusTopLeft: =18
+            RadiusTopRight: =18
+            RadiusBottomLeft: =18
+            RadiusBottomRight: =18
+            OnSelect: =Set(varCapturedPhoto, Camera1.Photo)
+
+      - imgPreview:
+          Control: Image
+          Properties:
+            X: =(Parent.Width - 300) / 2
+            Y: =120
+            Width: =300
+            Height: =300
+            Visible: =!IsBlank(varCapturedPhoto)
+            Image: =varCapturedPhoto
+            ImagePosition: =ImagePosition.Fill
+            RadiusTopLeft: =18
+            RadiusTopRight: =18
+            RadiusBottomLeft: =18
+            RadiusBottomRight: =18
+
+      - btnRetake:
+          Control: Button
+          Variant: Button.Classic
+          Properties:
+            X: =(Parent.Width - 200) / 2
+            Y: =448
+            Width: =200
+            Height: =44
+            Text: ="↻   Retake Photo"
+            Visible: =!IsBlank(varCapturedPhoto)
+            Fill: =clrGlassBg
+            HoverFill: =clrGlassBgHover
+            BorderColor: =clrGlassBorder
+            Color: =clrTextLight
+            RadiusTopLeft: =14
+            RadiusTopRight: =14
+            RadiusBottomLeft: =14
+            RadiusBottomRight: =14
+            Size: =14
+            OnSelect: =Set(varCapturedPhoto, Blank())
+
+      - btnCheckIn:
+          Control: Button
+          Variant: Button.Classic
+          Properties:
+            X: =20
+            Y: =Parent.Height - 110
+            Width: =Parent.Width - 40
+            Height: =86
+            Text: |
+              =If(
+                  IsBlank(varCapturedPhoto),
+                  "📷   TAKE A PHOTO TO CONTINUE",
+                  "✓   CHECK IN"
+              )
+            DisplayMode: |
+              =If(IsBlank(varCapturedPhoto), DisplayMode.Disabled, DisplayMode.Edit)
+            Fill: |
+              =If(IsBlank(varCapturedPhoto), clrDisabled, clrAccent)
+            HoverFill: =clrAccentDark
+            PressedFill: =clrAccentDark
+            Color: =clrTextLight
+            RadiusTopLeft: =24
+            RadiusTopRight: =24
+            RadiusBottomLeft: =24
+            RadiusBottomRight: =24
+            FontWeight: =FontWeight.Bold
+            Size: =20
+            OnSelect: |
+              =Patch(
+                  StaffAttendances,
+                  Defaults(StaffAttendances),
+                  {
+                      'Full Name': varSelectedStaff.DisplayName,
+                      'Email': varSelectedStaff.Mail,
+                      'Attendee Type': {Value: varAttendeeType},
+                      'Check-In Time': Now(),
+                      'Photo': varCapturedPhoto,
+                      'Azure AD Object Id': varSelectedStaff.UserId
+                  }
+              );
+              Navigate(scrConfirmation, ScreenTransition.Fade)
+
+  # ===========================================================================
+  # SCREEN 5 — CONFIRMATION
+  # ===========================================================================
+  scrConfirmation:
+    Properties:
+      Fill: =clrBgTop
+      OnVisible: =Reset(Timer1)
+    Children:
+      - icSuccess:
+          Control: Icon
+          Variant: Icon.CheckBadge
+          Properties:
+            X: =(Parent.Width - 100) / 2
+            Y: =Parent.Height * 0.30
+            Width: =100
+            Height: =100
+            Color: =clrAccent
+
+      - lblSuccess:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =Parent.Height * 0.30 + 120
+            Width: =Parent.Width
+            Height: =40
+            Text: ="You're checked in!"
+            Align: =Align.Center
+            FontWeight: =FontWeight.Bold
+            Size: =24
+            Color: =clrTextLight
+
+      - lblSuccessDetail:
+          Control: Label
+          Properties:
+            X: =0
+            Y: =Parent.Height * 0.30 + 164
+            Width: =Parent.Width
+            Height: =30
+            Text: |
+              =varSelectedStaff.DisplayName & " • " & Text(Now(), "hh:mm AM/PM")
+            Align: =Align.Center
+            Size: =15
+            Color: =clrTextMuted
+
+      - Timer1:
+          Control: Timer
+          Properties:
+            Duration: =3000
+            AutoStart: =true
+            Repeat: =false
+            Visible: =false
+            OnTimerEnd: |
+              =Set(varAttendeeType, "");
+              Set(varSelectedStaff, Blank());
+              Set(varCapturedPhoto, Blank());
+              Set(varSearchText, "");
+              Navigate(scrWelcome, ScreenTransition.Fade)
+
+# =============================================================================
+# DATAVERSE TABLE SCHEMA — StaffAttendances
+# =============================================================================
+# Column (Display Name)      Type          Notes
+# ---------------------------------------------------------------------------
+# Full Name                  Text          Required
+# Email                      Text          Blank for visitors
+# Attendee Type              Choice        Options: Staff, Visitor
+# Check-In Time              DateTime      Auto-populated via Now()
+# Photo                      Image         Captured check-in photo
+# Azure AD Object Id         Text          Entra ID objectId (blank for visitors)
+# =============================================================================
